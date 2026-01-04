@@ -1,0 +1,27 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${vcpkgRoot}/x64-windows/include",
+                "${vcpkgRoot}/x86-windows/include",
+                "${vcpkgRoot}/x86-windows-static/include",
+                "C:/DEV/LIBRARIES/emsdk/upstream/emscripten/cache/sysroot/include/**",
+                "C:/DEV/LIBRARIES",
+                "C:/DEV/LIBRARIES/emsdk/upstream/emscripten/cache/ports/**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "windowsSdkVersion": "10.0.22621.0",
+            "compilerPath": "C:/DEV/LIBRARIES/emsdk/upstream/emscripten/emcc.bat",
+            "cStandard": "c17",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "windows-gcc-x64"
+        }
+    ],
+    "version": 4
+}
