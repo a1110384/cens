@@ -13,7 +13,7 @@
 #define CHUNK_SIZE 512
 #define SINE_LENGTH 1024
 
-#define resShift 4
+#define resShift 3
 const unsigned int res = 1 << resShift;
 #define oscAmt (128 << resShift)
 const short oscs2 = oscAmt * 2;
