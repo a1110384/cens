@@ -1,0 +1,1 @@
+still quite a work in progress. by the way, the javascript file and the .wasm file are both generated entirely by emscripten from the .c file. so i haven't even seen whats in those. but the .c file is also still quite messy too
