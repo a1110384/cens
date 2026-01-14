@@ -17,7 +17,7 @@ static bool running = false;
 
 
 
-int SAMPLE_RATE = 48000;
+int SAMPLE_RATE = 44100;
 #define TWO_PI 6.283185
 #define CHUNK_SIZE 512
 #define SINE_LENGTH 1024
@@ -250,7 +250,7 @@ void generate() {
 	bool nTrigger = false;
 
 	int cFor = 0;
-	if (ranf() < 0.05f && cStep % 3 == 0) { nTrigger = true; cFor = rani(0, 1); }
+	if (ranf() < 0.04f && cStep % 4 == 0) { nTrigger = true; cFor = rani(0, 1); }
 
 	
 
@@ -274,9 +274,9 @@ void generate() {
 			0.0f, //hiMin
 			40, //Filter center
 			0, //Filter key tracking
-			120, //Filter distance
+			100, //Filter distance
 			10, //Filter min distance
-			2.5f, //Filter curve
+			2.7f, //Filter curve
 			2.0f, //Filter Falloff time
 
 			//EQs
@@ -425,11 +425,13 @@ int main() {
 
     saudio_setup(&(saudio_desc){
         .stream_cb = process,
+		.sample_rate = SAMPLE_RATE,
         .num_channels = 2,
         .buffer_frames = CHUNK_SIZE
     });
 	SAMPLE_RATE = saudio_sample_rate();
 
 	initAudioData();
+	printf("samplerate: %i\n", SAMPLE_RATE);
     return 0;
 }
