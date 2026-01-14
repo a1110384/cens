@@ -1,12 +1,21 @@
-//compile: emcc hello.c -o script.js -s USE_SDL=2 -s EXPORTED_RUNTIME_METHODS=['ccall'] -s NO_EXIT_RUNTIME=1
+//Make sure you link to emcscripten.h (emsdk/upstream/emscripten/system/include) and sokol_audio.h.
+//^^^Will have to download both if you dont already have them
+
+//COMPILE: emcc main.c -o audio_module.js -s NO_EXIT_RUNTIME=1 -s "EXPORTED_FUNCTIONS=['_main', '_set_volume', '_toggle_audio']"
+
+#define SOKOL_AUDIO_IMPL
+#include "sokol_audio.h"
+#include <emscripten.h>
+#include <stdlib.h>
 
 #include <stdio.h>
 #include <math.h>
-#include <SDL2/SDL.h>
-#include <emscripten/emscripten.h>
 #include <time.h>
-
 #include "UT.h"
+
+static bool running = false;
+
+
 
 #define SAMPLE_RATE 44100
 #define TWO_PI 6.283185
@@ -24,6 +33,7 @@ const float cpsInv = 1.0f / (float)CPS;
 const double lengthMult = SINE_LENGTH / (double)SAMPLE_RATE;
 const float byteMult = 1.0f / 256.0f;
 const float activeMult = 1.0f / 6.0f; 
+const float shortInv = 1.0f / 0x7FFF;
 
 unsigned short volume = 0.1f * 0xFFFF;
 int paused = 0;
@@ -330,42 +340,65 @@ unsigned short* getVols() {
 
 
 
-EMSCRIPTEN_KEEPALIVE
-void process(void *userdata, Uint8 *stream, int len) {
-    short *buffer = (short *)stream;
-    int samples = len / sizeof(short) / 2;
-    int andVal = SINE_LENGTH - 1;
-
-    float timeMult = 1.0f / samples;
-
-    generate();
-    cVols = getVols();
-
-    for (int i = 0; i < samples; i++) {
-
-        buffer[i * 2] = 0;
-        buffer[i * 2 + 1] = 0;
-
-        float time = i * timeMult;
-
-        for (int osc = 0; osc < oscAmt; osc++) {
-
-            if (cVols[osc * 2] == 0 && cVols[osc * 2 + 1] == 0 && cVols[osc * 2 + oscs2] == 0 && cVols[osc * 2 + 1 + oscs2] == 0) { continue; }
 
 
-            unsigned int index = (unsigned int)((i + cSample) * mtfs[osc] + sineStarts[osc]) & andVal;
+
+
+
+
+
+
+void process(float* fbuffer, int num_frames, int num_channels) {
+    int num_samples = num_frames * num_channels;
+    short sbuffer[num_samples];
+
+    if (running) {
+
+        int samples = num_frames;
+        int andVal = SINE_LENGTH - 1;
+        float timeMult = 1.0f / samples;
+
+        generate();
+        cVols = getVols();
+
+        for (int i = 0; i < samples; i++) {
+
+            sbuffer[i * 2] = 0;
+            sbuffer[i * 2 + 1] = 0;
+
+            float time = i * timeMult;
+
+            for (int osc = 0; osc < oscAmt; osc++) {
+
+                if (cVols[osc * 2] == 0 && cVols[osc * 2 + 1] == 0 && cVols[osc * 2 + oscs2] == 0 && cVols[osc * 2 + 1 + oscs2] == 0) { continue; }
+
+
+                unsigned int index = (unsigned int)((i + cSample) * mtfs[osc] + sineStarts[osc]) & andVal;
+                
+                short volL = lerp(cVols[osc * 2 + oscs2], cVols[osc * 2], time);
+                short volR = lerp(cVols[osc * 2 + 1 + oscs2], cVols[osc * 2 + 1], time);
+
+                sbuffer[i * 2] += ((int)sineWave[index] * volL >> 16) * volume >> 16;
+                sbuffer[i * 2 + 1] += ((int)sineWave[index] * volR >> 16) * volume >> 16;
+            }
             
-            short volL = lerp(cVols[osc * 2 + oscs2], cVols[osc * 2], time);
-            short volR = lerp(cVols[osc * 2 + 1 + oscs2], cVols[osc * 2 + 1], time);
-
-            buffer[i * 2] += ((int)sineWave[index] * volL >> 16) * volume >> 16;
-            buffer[i * 2 + 1] += ((int)sineWave[index] * volR >> 16) * volume >> 16;
         }
-        
+        cSample += samples;
+
+
+        for (int i = 0; i < num_samples; i++) {
+            fbuffer[i] = (float)(sbuffer[i]) * shortInv;
+        }
+
+
+
+    } else {
+        for (int i = 0; i < num_samples; i++) {
+            fbuffer[i] = 0.0f;
+        }
     }
-    cSample += samples;
 }
- 
+
 void initAudioData() {
     float oscMult = sqrt(1.0 / oscAmt);
 
@@ -379,52 +412,19 @@ void initAudioData() {
 }
 
 EMSCRIPTEN_KEEPALIVE
-void setVol(float v) { volume = v * 0.01f * 0xFFFF; }
-
+void set_volume(float v) { volume = v * 0xFFFF;; }
 EMSCRIPTEN_KEEPALIVE
-void init_audio() {
-    if (!started) {
+void toggle_audio() { running = !running; }
 
-        if (SDL_GetAudioStatus() == SDL_AUDIO_PLAYING) {
-            printf("Audio already playing.\n");
-            return;
-        }
+int main() {
 
-        if (SDL_Init(SDL_INIT_AUDIO) < 0) {
-            printf("SDL could not initialize! SDL Error: %s\n", SDL_GetError());
-            return;
-        }
+    initAudioData();
 
-        SDL_AudioSpec want;
-        SDL_zero(want);
-
-        want.freq = SAMPLE_RATE;
-        want.format = AUDIO_S16; // Use floating point audio
-        want.channels = 2;       // Mono
-        want.samples = CHUNK_SIZE;
-        want.callback = process;
-
-        initAudioData();
-
-        if (SDL_OpenAudio(&want, NULL) < 0) {
-            printf("Failed to open audio: %s\n", SDL_GetError());
-        } else {
-            SDL_PauseAudio(0); // Start playing
-            printf("Audio started successfully\n");
-            started = 1;
-        }
-    } else {
-        SDL_PauseAudio(!paused);
-        paused = !paused;
-    }
-}
-
-EMSCRIPTEN_KEEPALIVE
-void stop_audio() {
-    if (started) {
-        SDL_CloseAudio();
-        SDL_Quit();
-        started = 0;
-        printf("Audio closed.\n");
-    }
+    saudio_setup(&(saudio_desc){
+        .stream_cb = process,
+        .sample_rate = SAMPLE_RATE,
+        .num_channels = 2,
+        .buffer_frames = CHUNK_SIZE
+    });
+    return 0;
 }

@@ -1,36 +1,17 @@
-<!DOCTYPE html>
-<html>
-<body>
-    <h1>wasm tsting</h1>
-    <button id="playBtn">Start Audio</button>
+<!doctype html>
+<html lang="en-us">
+  <body>
+    <button id="toggle">Start/Stop Audio</button>
+    <input type="range" id="volume" min="0" max="1" step="0.01" value="0.1">
 
-    <input type="range" id="volSlider" min="0" max="100" value="10">
-    <label>Volume: <span id="volVal">10</span>%</label>
+    <script src="audio_module.js"></script>
 
-    <script src="script.js"></script>
     <script>
-        document.getElementById('playBtn').addEventListener('click', () => {
-            // Call the C function to start SDL audio
-            Module.ccall('init_audio', null, [], []);
-            
-            // Optional: Hide button after start
-            document.getElementById('playBtn').disabled = false;
-            document.getElementById('playBtn').innerText = "Toggle playback";
-        });
-
-        const slider = document.getElementById('volSlider');
-            slider.addEventListener('input', (e) => {
-            const val = parseFloat(e.target.value);
-            document.getElementById('volVal').innerText = val;
-            // Call the C function with the new frequency
-            Module.ccall('setVol', null, ['number'], [val]);
-        });
-
-        window.addEventListener('beforeunload', () => {
-            Module.ccall('stop_audio', null, [], []);
-        });
+        Module.onRuntimeInitialized = () => {
+            document.getElementById('toggle').onclick = () => { Module._toggle_audio(); };
+            document.getElementById('volume').oninput = (e) => { Module._set_volume(parseFloat(e.target.value)); };
+        };
     </script>
-
-
-</body>
+    
+  </body>
 </html>
