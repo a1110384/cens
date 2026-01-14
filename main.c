@@ -17,7 +17,7 @@ static bool running = false;
 
 
 
-#define SAMPLE_RATE 44100
+int SAMPLE_RATE = 48000;
 #define TWO_PI 6.283185
 #define CHUNK_SIZE 512
 #define SINE_LENGTH 1024
@@ -27,10 +27,10 @@ const unsigned int res = 1 << resShift;
 #define oscAmt (128 << resShift)
 const short oscs2 = oscAmt * 2;
 
-const int CPS = (SAMPLE_RATE / CHUNK_SIZE);
-const float cpsInv = 1.0f / (float)CPS;
+int CPS;
+float cpsInv;
 
-const double lengthMult = SINE_LENGTH / (double)SAMPLE_RATE;
+double lengthMult;
 const float byteMult = 1.0f / 256.0f;
 const float activeMult = 1.0f / 6.0f; 
 const float shortInv = 1.0f / 0x7FFF;
@@ -401,6 +401,9 @@ void process(float* fbuffer, int num_frames, int num_channels) {
 
 void initAudioData() {
     float oscMult = sqrt(1.0 / oscAmt);
+	CPS = (SAMPLE_RATE / CHUNK_SIZE);
+	cpsInv = 1.0f / (float)CPS;
+	lengthMult = SINE_LENGTH / (double)SAMPLE_RATE;
 
     for (int i = 0; i < SINE_LENGTH; i++) {
         sineWave[i] = (short)(sinf(i * TWO_PI / SINE_LENGTH) * 0x7FFF);
@@ -418,13 +421,15 @@ void toggle_audio() { running = !running; }
 
 int main() {
 
-    initAudioData();
+    
 
     saudio_setup(&(saudio_desc){
         .stream_cb = process,
-        .sample_rate = SAMPLE_RATE,
         .num_channels = 2,
         .buffer_frames = CHUNK_SIZE
     });
+	SAMPLE_RATE = saudio_sample_rate();
+
+	initAudioData();
     return 0;
 }
