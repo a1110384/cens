@@ -44,7 +44,7 @@ float mtfs[oscAmt];
 unsigned short sineStarts[oscAmt];
 unsigned short* cVols;
 
-#define bufferLength 512
+#define bufferLength 2048
 static unsigned char buffer[bufferLength][oscAmt][2];
 
 static int cStep = 0;
@@ -85,178 +85,124 @@ void setFFV(int offStep, float freq, float val, int channel) {
 
 }
 
-static void synthesize(
-	struct adsr vEnv,
-	int freq,
-	struct adsr pEnv,
-	float pEnvAmt,
-	float gain,
-
-	//Filter
-	float loMin,
-	float hiMin,
-	int center,
-	char fKeyTrack,
-	int distance,
-	int minDistance,
-	float fc,
-	float falloffTime,
-
-	//Eqs
-	int eq1Freq,
-	float eq1Amt,
-	int eq2Freq,
-	float eq2Amt,
-	int eq3Freq,
-	float eq3Amt,
-	int eqDist,
-	float eqMin,
-	
-	//Modulation
-	float vOscRate,
-	float vOscAmt,
-	float pOscRate,
-	float pOscAmt,
-
-	//Timbre
-	int harDist,
-	float noiseAmt,
-	float noiseCurve
-
-	) {
-
-	float a = vEnv.l * vEnv.ap;
-	float d = vEnv.l * vEnv.dp;
-	int stepLength = (int)((vEnv.l + vEnv.r) * CPS);
-
-	float pa = pEnv.l * pEnv.ap;
-	float pd = pEnv.l * pEnv.dp;
-
-	int rCenter = center * res;
-	if (fKeyTrack == 1) { rCenter = freq * res; }
-	int rDistance = distance * res;
-	int rMinDistance = minDistance * res;
-	float distInv = 1.0f / rDistance;
-	float rFalloffTime = 1.0f / falloffTime;
-
-	static float eqs[oscAmt];
-
-	static float harValues[oscAmt][2];
-
-	//Frequency Filters
-	for (int f = 0; f < oscAmt; f++) {
-
-		harValues[f][0] = ranf();
-		harValues[f][1] = ranf();
-
-		eqs[f] += envEq(f, eq1Freq, eqDist) * eq1Amt;
-		eqs[f] += envEq(f, eq2Freq, eqDist) * eq2Amt;
-		eqs[f] += envEq(f, eq3Freq, eqDist) * eq3Amt;
-		eqs[f] = lerp(eqs[f], 1.0f, eqMin);
-	}
-	
-	//Rendering pass
-	int i;
-	//#pragma omp parallel for num_threads(activeThreads)
-	for (i = 0; i < stepLength; i++) {
-		float time = i * cpsInv;
-		float v = envADSR(time, vEnv.l, a, d, vEnv.s, vEnv.r, vEnv.c) * gain; //Volume envelope
-		float p = envADSR(time, pEnv.l, pa, pd, pEnv.s, pEnv.r, pEnv.c) * pEnvAmt * res; //Pitch envelope
-		if (time >= pEnv.l) { p = 0.0f; }
-
-		//Harmonics
-		for (int h = 0; h < 100; h++) {
-
-			float index = harmonic(freq, h * harDist) * res;
-			if (index >= oscAmt) { break; } //If the harmonic is out of bounds, stop
-
-			//Made the cutoff distance relative to the volume of the note?
-			int cDistance = lerp(rMinDistance, rDistance, v);
-			
-			//FILTERING
-			float lowHighPass = 1.0f;
-			//Low pass
-			if (index >= rCenter && index < rCenter + cDistance) {
-				lowHighPass = lerp(powf(1.0f - ((index - rCenter) * distInv), fc), 1.0f, hiMin);
-			}
-			//High pass
-			if (index < rCenter && index > rCenter - cDistance) {
-				lowHighPass = lerp(powf((index - (rCenter - cDistance)) * distInv, fc), 1.0f, loMin);
-			}
-			//Outside of ranges
-			if (index >= rCenter + cDistance) { lowHighPass = hiMin; }
-			if (index <= rCenter - cDistance) { lowHighPass = loMin; }
-
-			lowHighPass *= eqs[(int)index];
-
-
-			
-			
-
-			setFFV(i, index + p + osc(time * pOscRate, pOscAmt), v * lowHighPass * osc(time * vOscRate, vOscAmt) * harValues[(int)index][0], 0);
-			setFFV(i, index + p + osc(time * pOscRate, pOscAmt), v * lowHighPass * osc(time * vOscRate, vOscAmt) * harValues[(int)index][1], 1);
-
-			//Octave down render for no reason?
-			setFFV(i, index + p + osc(time * pOscRate, pOscAmt) - 12.0f * res, v * lowHighPass * osc(time * vOscRate, vOscAmt) * harValues[(int)index][0], 0);
-			setFFV(i, index + p + osc(time * pOscRate, pOscAmt) - 12.0f * res, v * lowHighPass * osc(time * vOscRate, vOscAmt) * harValues[(int)index][1], 1);
-		}
-
-	}
-}
-
-
 void generate() {
 	bool nTrigger = false;
 
 	int cFor = 0;
 	if (ranf() < 0.04f && cStep % 4 == 0) { nTrigger = true; cFor = rani(0, 1); }
+	if (!nTrigger) return;
 
 	for (int note = 0; note < rani(1, 6); note++) {
 
-		//If note isnt triggered, goto next note
-		if (!nTrigger) { continue; }
-		//else...
+		struct adsr vEnv = { 8.0f, ranfIn(0.2f, 0.5f), 0.5f, 0.5f, 5.0f, 1.9f};
+		float gain = ranfIn(0.8f, 0.99f);
+		struct adsr pEnv = { 1.9f, 0.0f, 0.9f, 0.0f, 0.0f, 1.9f };
+		float pEnvAmt = -0.5f;
+		int freq = k2m(rani(29, 41) + note * 2, cKey);
 
-		//MAKE ATTACK/DECAY 1 VALUE (DECAY = 1f - AP)
-		struct adsr s1v = { 8.0f, ranfIn(0.2f, 0.5f), 0.5f, 0.5f, 5.0f, 1.9f};
-		struct adsr s1p = { 1.9f, 0.0f, 0.9f, 0.0f, 0.0f, 1.9f };
-		synthesize(
-			s1v, //vEnv
-			k2m(rani(29, 41) + note * 2, cKey), //Freq
-			s1p, //pEnv
-			-0.5f, //pEnvAmt
-			ranfIn(0.8f, 0.99f), //Gain
+		float loMin = 1.0f;
+		float hiMin = 0.0f;
+		int center = 40;
+		char fKeyTrack = 0;
+		int distance = 100;
+		int minDistance = 10;
 
-			1.0f, //loMin
-			0.0f, //hiMin
-			40, //Filter center
-			0, //Filter key tracking
-			100, //Filter distance
-			10, //Filter min distance
-			2.7f, //Filter curve
-			2.0f, //Filter Falloff time
+		int eq1Freq = formants[cFor * 3 + 0] << resShift;
+		float eq1Amt = 1.0f;
+		int eq2Freq = formants[cFor * 3 + 1] << resShift;
+		float eq2Amt = 1.0f;
+		int eq3Freq = formants[cFor * 3 + 2] << resShift;
+		float eq3Amt = 0.5f;
+		int eqDist = 9 * res;
+		float eqMin = 0.9f;
 
-			//EQs
-			formants[cFor * 3 + 0] << resShift,
-			1.0f,
-			formants[cFor * 3 + 1] << resShift,
-			1.0f,
-			formants[cFor * 3 + 2] << resShift,
-			0.5f,
-			9 * res, //eqDist
-			0.9f, //eqMin
+		float fc = 2.7f;
+		float falloffTime = 2.0f;
 
-			rani(2, 5), //vOscRate
-			ranfIn(0.0f, 0.1f), //vOscAmt
+		float vOscRate = rani(2, 5);
+		float vOscAmt = ranfIn(0.0f, 0.1f);
 
-			ranfIn(18.0f, 19.0f), //pOscRate
-			ranfIn(0.0f, 0.05f) * res, //pOscAmt
+		float pOscRate = ranfIn(18.0f, 19.0f);
+		float pOscAmt = ranfIn(0.0f, 0.05f) * res;
 
-			rani(1, 5), //harDist
-			ranfIn(0.0f, 0.02f), //Noise amount
-			0.5f //Noise curve
-		);
+		int harDist = rani(1, 5);
+
+
+
+		float a = vEnv.l * vEnv.ap;
+		float d = vEnv.l * vEnv.dp;
+		int stepLength = (int)((vEnv.l + vEnv.r) * CPS);
+
+		float pa = pEnv.l * pEnv.ap;
+		float pd = pEnv.l * pEnv.dp;
+
+		int rCenter = center * res;
+		if (fKeyTrack == 1) { rCenter = freq * res; }
+		int rDistance = distance * res;
+		int rMinDistance = minDistance * res;
+		float distInv = 1.0f / rDistance;
+		float rFalloffTime = 1.0f / falloffTime;
+
+		static float eqs[oscAmt];
+
+		static float harValues[oscAmt][2];
+
+		//Frequency Filters
+		for (int f = 0; f < oscAmt; f++) {
+
+			harValues[f][0] = ranf();
+			harValues[f][1] = ranf();
+
+			eqs[f] += envEq(f, eq1Freq, eqDist) * eq1Amt;
+			eqs[f] += envEq(f, eq2Freq, eqDist) * eq2Amt;
+			eqs[f] += envEq(f, eq3Freq, eqDist) * eq3Amt;
+			eqs[f] = lerp(eqs[f], 1.0f, eqMin);
+		}
 		
+		//Rendering pass
+		int i;
+		//#pragma omp parallel for num_threads(activeThreads)
+		for (i = 0; i < stepLength; i++) {
+			float time = i * cpsInv;
+			float v = envADSR(time, vEnv.l, a, d, vEnv.s, vEnv.r, vEnv.c) * gain; //Volume envelope
+			float p = envADSR(time, pEnv.l, pa, pd, pEnv.s, pEnv.r, pEnv.c) * pEnvAmt * res; //Pitch envelope
+			if (time >= pEnv.l) { p = 0.0f; }
+
+			//Harmonics
+			for (int h = 0; h < 100; h++) {
+
+				float index = harmonic(freq, h * harDist) * res;
+				if (index >= oscAmt) { break; } //If the harmonic is out of bounds, stop
+
+				//Made the cutoff distance relative to the volume of the note?
+				int cDistance = lerp(rMinDistance, rDistance, v);
+				
+				//FILTERING
+				float lowHighPass = 1.0f;
+				//Low pass
+				if (index >= rCenter && index < rCenter + cDistance) {
+					lowHighPass = lerp(powf(1.0f - ((index - rCenter) * distInv), fc), 1.0f, hiMin);
+				}
+				//High pass
+				if (index < rCenter && index > rCenter - cDistance) {
+					lowHighPass = lerp(powf((index - (rCenter - cDistance)) * distInv, fc), 1.0f, loMin);
+				}
+				//Outside of ranges
+				if (index >= rCenter + cDistance) { lowHighPass = hiMin; }
+				if (index <= rCenter - cDistance) { lowHighPass = loMin; }
+
+				lowHighPass *= eqs[(int)index];
+				
+
+				setFFV(i, index + p + osc(time * pOscRate, pOscAmt), v * lowHighPass * osc(time * vOscRate, vOscAmt) * harValues[(int)index][0], 0);
+				setFFV(i, index + p + osc(time * pOscRate, pOscAmt), v * lowHighPass * osc(time * vOscRate, vOscAmt) * harValues[(int)index][1], 1);
+
+				//Octave down render for no reason?
+				setFFV(i, index + p + osc(time * pOscRate, pOscAmt) - 12.0f * res, v * lowHighPass * osc(time * vOscRate, vOscAmt) * harValues[(int)index][0], 0);
+				setFFV(i, index + p + osc(time * pOscRate, pOscAmt) - 12.0f * res, v * lowHighPass * osc(time * vOscRate, vOscAmt) * harValues[(int)index][1], 1);
+			}
+
+		}
 	}
 	
 }
@@ -314,7 +260,6 @@ void cAudioRender(short* sbuffer, int samples) {
 
 			if (cVols[osc * 2] == 0 && cVols[osc * 2 + 1] == 0 && cVols[osc * 2 + oscs2] == 0 && cVols[osc * 2 + 1 + oscs2] == 0) { continue; }
 
-
 			unsigned int index = (unsigned int)((i + cSample) * mtfs[osc] + sineStarts[osc]) & andVal;
 					
 			short volL = lerp(cVols[osc * 2 + oscs2], cVols[osc * 2], time);
@@ -326,13 +271,6 @@ void cAudioRender(short* sbuffer, int samples) {
 				
 	}
 }
-
-
-
-
-
-
-
 
 
 
