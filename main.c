@@ -19,7 +19,7 @@ static bool simple = false;
 
 int SAMPLE_RATE = 44100;
 #define TWO_PI 6.283185
-#define CHUNK_SIZE 512
+#define CHUNK_SIZE 2048
 #define SINE_LENGTH 1024
 
 #define resShift 3
@@ -89,8 +89,8 @@ void generate() {
 	bool nTrigger = false;
 
 	int cFor = 0;
-	
-	if (ranf() < 0.04f && cStep % 4 == 0) { nTrigger = true; cFor = rani(0, 1); }
+
+	if (ranf() < 0.04f && cStep % 1 == 0) { nTrigger = true; cFor = rani(0, 1); }
 	if (!nTrigger) return;
 
 	for (int note = 0; note < rani(1, 6); note++) {
@@ -170,7 +170,7 @@ void generate() {
 			if (time >= pEnv.l) { p = 0.0f; }
 
 			//Harmonics
-			for (int h = 0; h < 100; h++) {
+			for (int h = 0; h < 10; h++) {
 
 				float index = harmonic(freq, h * harDist) * res;
 				if (index >= oscAmt) { break; } //If the harmonic is out of bounds, stop
@@ -345,3 +345,7 @@ int main() {
 	printf("samplerate: %i\n", SAMPLE_RATE);
     return 0;
 }
+
+
+//(44100sr / 512 chunk) * 8sec note * 5 notes * 100 harms = 344531 buffer placements/calculations
+//(44100sr / 2048 chunk) * 8sec note * 5 notes * 10 harms = 8613 buffer placements
