@@ -1592,8 +1592,7 @@ function saudio_js_suspended() { if (Module._saudio_context) { if (Module._saudi
 
 // Imports from the Wasm binary.
 var __saudio_emsc_pull = Module['__saudio_emsc_pull'] = makeInvalidEarlyAccess('__saudio_emsc_pull');
-var _set_volume = Module['_set_volume'] = makeInvalidEarlyAccess('_set_volume');
-var _toggle_audio = Module['_toggle_audio'] = makeInvalidEarlyAccess('_toggle_audio');
+var _htmlInput = Module['_htmlInput'] = makeInvalidEarlyAccess('_htmlInput');
 var _main = Module['_main'] = makeInvalidEarlyAccess('_main');
 var _fflush = makeInvalidEarlyAccess('_fflush');
 var _strerror = makeInvalidEarlyAccess('_strerror');
@@ -1610,8 +1609,7 @@ var wasmMemory = makeInvalidEarlyAccess('wasmMemory');
 
 function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['_saudio_emsc_pull'] != 'undefined', 'missing Wasm export: _saudio_emsc_pull');
-  assert(typeof wasmExports['set_volume'] != 'undefined', 'missing Wasm export: set_volume');
-  assert(typeof wasmExports['toggle_audio'] != 'undefined', 'missing Wasm export: toggle_audio');
+  assert(typeof wasmExports['htmlInput'] != 'undefined', 'missing Wasm export: htmlInput');
   assert(typeof wasmExports['main'] != 'undefined', 'missing Wasm export: main');
   assert(typeof wasmExports['fflush'] != 'undefined', 'missing Wasm export: fflush');
   assert(typeof wasmExports['strerror'] != 'undefined', 'missing Wasm export: strerror');
@@ -1625,8 +1623,7 @@ function assignWasmExports(wasmExports) {
   assert(typeof wasmExports['memory'] != 'undefined', 'missing Wasm export: memory');
   assert(typeof wasmExports['__indirect_function_table'] != 'undefined', 'missing Wasm export: __indirect_function_table');
   __saudio_emsc_pull = Module['__saudio_emsc_pull'] = createExportWrapper('_saudio_emsc_pull', 1);
-  _set_volume = Module['_set_volume'] = createExportWrapper('set_volume', 1);
-  _toggle_audio = Module['_toggle_audio'] = createExportWrapper('toggle_audio', 0);
+  _htmlInput = Module['_htmlInput'] = createExportWrapper('htmlInput', 2);
   _main = Module['_main'] = createExportWrapper('main', 2);
   _fflush = createExportWrapper('fflush', 1);
   _strerror = createExportWrapper('strerror', 1);

@@ -8,8 +8,8 @@
 
     <script>
         Module.onRuntimeInitialized = () => {
-            document.getElementById('toggle').onclick = () => { Module._toggle_audio(); };
-            document.getElementById('volume').oninput = (e) => { Module._set_volume(parseFloat(e.target.value)); };
+            document.getElementById('toggle').onclick = () => { Module._htmlInput(1, -1.0); };
+            document.getElementById('volume').oninput = (e) => { Module._htmlInput(0, parseFloat(e.target.value)); };
         };
     </script>
     

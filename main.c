@@ -1,7 +1,7 @@
 //Make sure you link to emcscripten.h (emsdk/upstream/emscripten/system/include) and sokol_audio.h.
 //^^^Will have to download both if you dont already have them
 
-//COMPILE: emcc main.c -o audio_module.js -s NO_EXIT_RUNTIME=1 -s "EXPORTED_FUNCTIONS=['_main', '_set_volume', '_toggle_audio']"
+//COMPILE: emcc main.c -o audio_module.js -s NO_EXIT_RUNTIME=1 -s "EXPORTED_FUNCTIONS=['_main', '_htmlInput']"
 
 #define SOKOL_AUDIO_IMPL
 #include "sokol_audio.h"
@@ -14,6 +14,7 @@
 #include "UT.h"
 
 static bool running = false;
+static bool simple = false;
 
 
 
@@ -265,7 +266,7 @@ void generate() {
 		struct adsr s1p = { 1.9f, 0.0f, 0.9f, 0.0f, 0.0f, 1.9f };
 		synthesize(
 			s1v, //vEnv
-			k2m(rani(26, 39) + note * 2, cKey), //Freq
+			k2m(rani(29, 41) + note * 2, cKey), //Freq
 			s1p, //pEnv
 			-0.5f, //pEnvAmt
 			ranfIn(0.8f, 0.99f), //Gain
@@ -414,18 +415,22 @@ void initAudioData() {
     }
 }
 
+
 EMSCRIPTEN_KEEPALIVE
-void set_volume(float v) { volume = v * 0xFFFF;; }
-EMSCRIPTEN_KEEPALIVE
-void toggle_audio() { running = !running; }
+void htmlInput(int toggle, float vol) {
+	if (toggle == 1) { running = !running; }
+	if (toggle == 2) { simple = !simple; }
+	if (vol >= 0.0f) { volume = vol * 0xFFFF; }
+}
 
 int main() {
 
-    
+    //CREATE A GENERAL INPUT HANDLER FUNCTION FOR CONTROLLING THE SYNTH (jam every functionality into it)
+	//Have a toggle to switch to simple single sine osc mode and see if mobile is still bad
 
     saudio_setup(&(saudio_desc){
         .stream_cb = process,
-		.sample_rate = SAMPLE_RATE,
+		//.sample_rate = SAMPLE_RATE, //GET RID OF THIS
         .num_channels = 2,
         .buffer_frames = CHUNK_SIZE
     });
