@@ -359,31 +359,45 @@ void process(float* fbuffer, int num_frames, int num_channels) {
         int andVal = SINE_LENGTH - 1;
         float timeMult = 1.0f / samples;
 
-        generate();
-        cVols = getVols();
+		if (!simple) {
+			//NORMAL ADDITIVE
+			generate();
+			cVols = getVols();
 
-        for (int i = 0; i < samples; i++) {
+			for (int i = 0; i < samples; i++) {
 
-            sbuffer[i * 2] = 0;
-            sbuffer[i * 2 + 1] = 0;
+				sbuffer[i * 2] = 0;
+				sbuffer[i * 2 + 1] = 0;
 
-            float time = i * timeMult;
+				float time = i * timeMult;
 
-            for (int osc = 0; osc < oscAmt; osc++) {
+				for (int osc = 0; osc < oscAmt; osc++) {
 
-                if (cVols[osc * 2] == 0 && cVols[osc * 2 + 1] == 0 && cVols[osc * 2 + oscs2] == 0 && cVols[osc * 2 + 1 + oscs2] == 0) { continue; }
+					if (cVols[osc * 2] == 0 && cVols[osc * 2 + 1] == 0 && cVols[osc * 2 + oscs2] == 0 && cVols[osc * 2 + 1 + oscs2] == 0) { continue; }
 
 
-                unsigned int index = (unsigned int)((i + cSample) * mtfs[osc] + sineStarts[osc]) & andVal;
-                
-                short volL = lerp(cVols[osc * 2 + oscs2], cVols[osc * 2], time);
-                short volR = lerp(cVols[osc * 2 + 1 + oscs2], cVols[osc * 2 + 1], time);
+					unsigned int index = (unsigned int)((i + cSample) * mtfs[osc] + sineStarts[osc]) & andVal;
+					
+					short volL = lerp(cVols[osc * 2 + oscs2], cVols[osc * 2], time);
+					short volR = lerp(cVols[osc * 2 + 1 + oscs2], cVols[osc * 2 + 1], time);
 
-                sbuffer[i * 2] += ((int)sineWave[index] * volL >> 16) * volume >> 16;
-                sbuffer[i * 2 + 1] += ((int)sineWave[index] * volR >> 16) * volume >> 16;
-            }
-            
-        }
+					sbuffer[i * 2] += ((int)sineWave[index] * volL >> 16) * volume >> 16;
+					sbuffer[i * 2 + 1] += ((int)sineWave[index] * volR >> 16) * volume >> 16;
+				}
+				
+			}
+		} else {
+			//SIMPLIFIED SINE TEST
+
+			for (int i = 0; i < samples; i++) {
+				short pos = sineWave[(i + cSample) * 10 & andVal];
+				sbuffer[i * 2] = pos * volume >> 16;
+				sbuffer[i * 2 + 1] = pos * volume >> 16;
+
+			}
+		}
+
+        
         cSample += samples;
 
 

@@ -3,12 +3,14 @@
   <body>
     <button id="toggle">Start/Stop Audio</button>
     <input type="range" id="volume" min="0" max="1" step="0.01" value="0.1">
+    <button id="toggleSimple">Toggle sine test</button>
 
     <script src="audio_module.js"></script>
 
     <script>
         Module.onRuntimeInitialized = () => {
             document.getElementById('toggle').onclick = () => { Module._htmlInput(1, -1.0); };
+            document.getElementById('toggleSimple').onclick = () => { Module._htmlInput(2, -1.0); };
             document.getElementById('volume').oninput = (e) => { Module._htmlInput(0, parseFloat(e.target.value)); };
         };
     </script>
