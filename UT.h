@@ -41,8 +41,10 @@ float envEq(float t, float center, float distance) {
 	return (t - center) / distance; //Upper slope
 }
 
-static int fAh[] = { 76, 85, 100 };
-static int fEe[] = { 62, 94, 101 };
-static int fEh[] = { 67, 92, 99 };
-static int fOh[] = { 67, 79, 99 };
-static int fOo[] = { 65, 74, 100 };
+static const int formants[] = {
+	76, 85, 100, //ah
+	62, 94, 101, //ee
+	67, 92, 99, //eh
+	67, 79, 99, //oh
+	65, 74, 100 //oo
+};

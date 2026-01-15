@@ -6,7 +6,6 @@
 #define SOKOL_AUDIO_IMPL
 #include "sokol_audio.h"
 #include <emscripten.h>
-#include <stdlib.h>
 
 #include <stdio.h>
 #include <math.h>
@@ -37,8 +36,6 @@ const float activeMult = 1.0f / 6.0f;
 const float shortInv = 1.0f / 0x7FFF;
 
 unsigned short volume = 0.1f * 0xFFFF;
-int paused = 0;
-char started = 0;
 int cSample = 0;
 
 short sineWave[SINE_LENGTH];
@@ -61,7 +58,7 @@ struct adsr {
 	float c;
 };
 
-int k2m(float note7, int key[]) {
+int k2m(float note7, const int* key) {
 	float oct = note7 / 7.0f;
 	int note = (int)note7 - ((int)oct * 7.0f);
 	return min(((int)oct * 12 + key[note]), oscAmt - 1);
@@ -69,29 +66,7 @@ int k2m(float note7, int key[]) {
 float osc(float t, float amt) { return 1.0f - (sineWave[(int)(t * SINE_LENGTH) % SINE_LENGTH] / (float)0x7FFF + 1.0f) * 0.5f * amt; }
 
 
-int getFormant(int vowel, int formant) {
-	switch (vowel) {
-	case 0: return fAh[formant] << resShift;
-	case 1: return fEe[formant] << resShift;
-	case 2: return fEh[formant] << resShift;
-	case 3: return fOh[formant] << resShift;
-	case 4: return fOo[formant] << resShift;
-	}
-	return 0;
-}
-
-
-const int cKey[] = { 0, 2, 4, 5, 7, 9, 11 };
-
-void setFV(int offStep, int freq, float val) {
-	if (freq >= oscAmt || freq < 0) { return; }
-	
-	int pos = (cStep + offStep) % bufferLength;
-	unsigned short v = clampf(val, 0.0f, 1.0f) * 255;
-
-	buffer[pos][freq][0] = clamp((unsigned short)buffer[pos][freq][0] + v, 0, 255); 
-	buffer[pos][freq][1] = clamp((unsigned short)buffer[pos][freq][1] + v, 0, 255);
-}
+int cKey[] = { 0, 2, 4, 5, 7, 9, 11 };
 
 //Same as above but using float frequency
 void setFFV(int offStep, float freq, float val, int channel) {
@@ -105,17 +80,8 @@ void setFFV(int offStep, float freq, float val, int channel) {
 	unsigned short v1 = clampf(val * sqrtf(1.0f - diff), 0.0f, 1.0f) * 255;
 	unsigned short v2 = clampf(val * sqrtf(diff), 0.0f, 1.0f) * 255;
 
-	if (channel == 2) {
-		buffer[pos][f1][0] = clamp((unsigned short)buffer[pos][f1][0] + v1, 0, 255);
-		buffer[pos][f1][1] = clamp((unsigned short)buffer[pos][f1][1] + v1, 0, 255);
-
-		buffer[pos][f2][0] = clamp((unsigned short)buffer[pos][f2][0] + v2, 0, 255);
-		buffer[pos][f2][1] = clamp((unsigned short)buffer[pos][f2][1] + v2, 0, 255);
-	}
-	else {
-		buffer[pos][f1][channel] = clamp((unsigned short)buffer[pos][f1][channel] + v1, 0, 255);
-		buffer[pos][f2][channel] = clamp((unsigned short)buffer[pos][f2][channel] + v2, 0, 255);
-	}
+	buffer[pos][f1][channel] = clamp((unsigned short)buffer[pos][f1][channel] + v1, 0, 255); //Upper freq
+	buffer[pos][f2][channel] = clamp((unsigned short)buffer[pos][f2][channel] + v2, 0, 255); //Lower freq
 
 }
 
@@ -159,7 +125,6 @@ static void synthesize(
 
 	) {
 
-
 	float a = vEnv.l * vEnv.ap;
 	float d = vEnv.l * vEnv.dp;
 	int stepLength = (int)((vEnv.l + vEnv.r) * CPS);
@@ -189,8 +154,6 @@ static void synthesize(
 		eqs[f] += envEq(f, eq3Freq, eqDist) * eq3Amt;
 		eqs[f] = lerp(eqs[f], 1.0f, eqMin);
 	}
-
-	
 	
 	//Rendering pass
 	int i;
@@ -243,17 +206,10 @@ static void synthesize(
 
 
 void generate() {
-
-	//Init Seeding
-	for (int t = 0; t < time(NULL) % 256; t++) { ranf(); }
-	
-	
 	bool nTrigger = false;
 
 	int cFor = 0;
 	if (ranf() < 0.04f && cStep % 4 == 0) { nTrigger = true; cFor = rani(0, 1); }
-
-	
 
 	for (int note = 0; note < rani(1, 6); note++) {
 
@@ -262,7 +218,7 @@ void generate() {
 		//else...
 
 		//MAKE ATTACK/DECAY 1 VALUE (DECAY = 1f - AP)
-		struct adsr s1v = { 8.0f, ranfIn(0.0f, 0.5f), 0.5f, 0.5f, 5.0f, 1.9f};
+		struct adsr s1v = { 8.0f, ranfIn(0.2f, 0.5f), 0.5f, 0.5f, 5.0f, 1.9f};
 		struct adsr s1p = { 1.9f, 0.0f, 0.9f, 0.0f, 0.0f, 1.9f };
 		synthesize(
 			s1v, //vEnv
@@ -281,11 +237,11 @@ void generate() {
 			2.0f, //Filter Falloff time
 
 			//EQs
-			getFormant(cFor, 0),
+			formants[cFor * 3 + 0] << resShift,
 			1.0f,
-			getFormant(cFor, 1),
+			formants[cFor * 3 + 1] << resShift,
 			1.0f,
-			getFormant(cFor, 2),
+			formants[cFor * 3 + 2] << resShift,
 			0.5f,
 			9 * res, //eqDist
 			0.9f, //eqMin
@@ -338,7 +294,38 @@ unsigned short* getVols() {
 
 
 
+void cAudioRender(short* sbuffer, int samples) {
+	//NORMAL ADDITIVE
 
+	int andVal = SINE_LENGTH - 1;
+    float timeMult = 1.0f / samples;
+
+	generate();
+	cVols = getVols();
+
+	for (int i = 0; i < samples; i++) {
+
+		sbuffer[i * 2] = 0;
+		sbuffer[i * 2 + 1] = 0;
+
+		float time = i * timeMult;
+
+		for (int osc = 0; osc < oscAmt; osc++) {
+
+			if (cVols[osc * 2] == 0 && cVols[osc * 2 + 1] == 0 && cVols[osc * 2 + oscs2] == 0 && cVols[osc * 2 + 1 + oscs2] == 0) { continue; }
+
+
+			unsigned int index = (unsigned int)((i + cSample) * mtfs[osc] + sineStarts[osc]) & andVal;
+					
+			short volL = lerp(cVols[osc * 2 + oscs2], cVols[osc * 2], time);
+			short volR = lerp(cVols[osc * 2 + 1 + oscs2], cVols[osc * 2 + 1], time);
+
+			sbuffer[i * 2] += ((int)sineWave[index] * volL >> 16) * volume >> 16;
+			sbuffer[i * 2 + 1] += ((int)sineWave[index] * volR >> 16) * volume >> 16;
+		}
+				
+	}
+}
 
 
 
@@ -354,63 +341,29 @@ void process(float* fbuffer, int num_frames, int num_channels) {
     short sbuffer[num_samples];
 
     if (running) {
-
         int samples = num_frames;
-        int andVal = SINE_LENGTH - 1;
-        float timeMult = 1.0f / samples;
 
 		if (!simple) {
-			//NORMAL ADDITIVE
-			generate();
-			cVols = getVols();
-
-			for (int i = 0; i < samples; i++) {
-
-				sbuffer[i * 2] = 0;
-				sbuffer[i * 2 + 1] = 0;
-
-				float time = i * timeMult;
-
-				for (int osc = 0; osc < oscAmt; osc++) {
-
-					if (cVols[osc * 2] == 0 && cVols[osc * 2 + 1] == 0 && cVols[osc * 2 + oscs2] == 0 && cVols[osc * 2 + 1 + oscs2] == 0) { continue; }
-
-
-					unsigned int index = (unsigned int)((i + cSample) * mtfs[osc] + sineStarts[osc]) & andVal;
-					
-					short volL = lerp(cVols[osc * 2 + oscs2], cVols[osc * 2], time);
-					short volR = lerp(cVols[osc * 2 + 1 + oscs2], cVols[osc * 2 + 1], time);
-
-					sbuffer[i * 2] += ((int)sineWave[index] * volL >> 16) * volume >> 16;
-					sbuffer[i * 2 + 1] += ((int)sineWave[index] * volR >> 16) * volume >> 16;
-				}
-				
-			}
+			cAudioRender(sbuffer, samples);
 		} else {
 			//SIMPLIFIED SINE TEST
 
 			for (int i = 0; i < samples; i++) {
-				short pos = sineWave[(i + cSample) * 10 & andVal];
+				short pos = sineWave[(i + cSample) * 10 & (SINE_LENGTH - 1)];
 				sbuffer[i * 2] = pos * volume >> 16;
 				sbuffer[i * 2 + 1] = pos * volume >> 16;
 
 			}
 		}
-
         
         cSample += samples;
 
-
-        for (int i = 0; i < num_samples; i++) {
-            fbuffer[i] = (float)(sbuffer[i]) * shortInv;
-        }
-
-
+		//Convert to 32bit float
+        for (int i = 0; i < num_samples; i++) { fbuffer[i] = (float)(sbuffer[i]) * shortInv; }
 
     } else {
-        for (int i = 0; i < num_samples; i++) {
-            fbuffer[i] = 0.0f;
-        }
+		//Set to 0s if turned off
+        for (int i = 0; i < num_samples; i++) { fbuffer[i] = 0.0f; }
     }
 }
 
@@ -427,6 +380,9 @@ void initAudioData() {
         mtfs[osc] = mtf(osc / (float)res) * lengthMult;
         sineStarts[osc] = rand() & 0xFFFF;
     }
+
+	//Init Seeding
+	for (int t = 0; t < time(NULL) % 256; t++) { ranf(); }
 }
 
 
@@ -439,12 +395,8 @@ void htmlInput(int toggle, float vol) {
 
 int main() {
 
-    //CREATE A GENERAL INPUT HANDLER FUNCTION FOR CONTROLLING THE SYNTH (jam every functionality into it)
-	//Have a toggle to switch to simple single sine osc mode and see if mobile is still bad
-
     saudio_setup(&(saudio_desc){
         .stream_cb = process,
-		//.sample_rate = SAMPLE_RATE, //GET RID OF THIS
         .num_channels = 2,
         .buffer_frames = CHUNK_SIZE
     });
