@@ -89,6 +89,7 @@ void generate() {
 	bool nTrigger = false;
 
 	int cFor = 0;
+	
 	if (ranf() < 0.04f && cStep % 4 == 0) { nTrigger = true; cFor = rani(0, 1); }
 	if (!nTrigger) return;
 
